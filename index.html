@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Pencarian Teks dalam File</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px 0;
+    }
+    .file-item {
+      margin-top: 15px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .highlight {
+      background-color: yellow;
+      font-weight: bold;
+    }
+    .snippet {
+      margin-top: 5px;
+      color: #444;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Cari Teks dalam Banyak File</h2>
+
+<input type="file" id="fileInput" multiple>
+<br>
+
+<input type="text" id="searchText" placeholder="Masukkan teks yang dicari">
+<br>
+
+<button onclick="searchTextInFiles()">Cari</button>
+
+<div id="result"></div>
+
+<script>
+let filesContent = [];
+
+document.getElementById('fileInput').addEventListener('change', function(event) {
+  const files = event.target.files;
+  filesContent = [];
+
+  for (let file of files) {
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+      filesContent.push({
+        name: file.name,
+        content: e.target.result
+      });
+    };
+
+    reader.readAsText(file);
+  }
+});
+
+function highlightText(text, keyword) {
+  const regex = new RegExp(`(${keyword})`, 'gi');
+  return text.replace(regex, '<span class="highlight">$1</span>');
+}
+
+function getSnippet(content, keyword) {
+  const index = content.toLowerCase().indexOf(keyword.toLowerCase());
+
+  if (index === -1) return '';
+
+  const start = Math.max(0, index - 40);
+  const end = Math.min(content.length, index + 40);
+
+  return content.substring(start, end);
+}
+
+function searchTextInFiles() {
+  const keyword = document.getElementById('searchText').value;
+  const resultDiv = document.getElementById('result');
+  resultDiv.innerHTML = '';
+
+  if (!keyword) {
+    resultDiv.innerHTML = "Masukkan teks terlebih dahulu.";
+    return;
+  }
+
+  let found = false;
+
+  filesContent.forEach(file => {
+    if (file.content.toLowerCase().includes(keyword.toLowerCase())) {
+      found = true;
+
+      const snippet = getSnippet(file.content, keyword);
+      const highlighted = highlightText(snippet, keyword);
+
+      const div = document.createElement('div');
+      div.className = 'file-item';
+      div.innerHTML = `
+        📄 <strong>${file.name}</strong>
+        <div class="snippet">...${highlighted}...</div>
+      `;
+
+      resultDiv.appendChild(div);
+    }
+  });
+
+  if (!found) {
+    resultDiv.innerHTML = "Tidak ditemukan teks di file manapun.";
+  }
+}
+</script>
+
+</body>
+</html>
