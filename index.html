@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pencarian Teks dalam File</title>
+
+  <!-- Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/unrar-js@0.1.2/dist/unrar.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #f4f7f6;
+      --text-color: #333333;
+      --card-bg: #ffffff;
+      --border-color: #e0e0e0;
+      --primary-color: #4f46e5;
+      --primary-hover: #4338ca;
+      --highlight-bg: #fde047;
+      --highlight-text: #111827;
+      --snippet-color: #6b7280;
+      --transition: 0.3s ease;
+      --toggle-bg: #cbd5e1;
+    }
+    [data-theme="dark"] {
+      --bg-color: #111827;
+      --text-color: #f9fafb;
+      --card-bg: #1f2937;
+      --border-color: #374151;
+      --primary-color: #6366f1;
+      --primary-hover: #818cf8;
+      --highlight-bg: #fcd34d;
+      --highlight-text: #111827;
+      --snippet-color: #9ca3af;
+      --toggle-bg: #4b5563;
+    }
+    * { box-sizing: border-box; transition: background-color var(--transition), color var(--transition), border-color var(--transition); }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background-color: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    h2 { margin: 0; font-size: 1.5rem; }
+    .theme-switch {
+      display: inline-block;
+      height: 32px;
+      position: relative;
+      width: 64px;
+    }
+    .theme-switch input { display: none; }
+    .slider {
+      background-color: var(--toggle-bg);
+      bottom: 0;
+      cursor: pointer;
+      left: 0;
+      position: absolute;
+      right: 0;
+      top: 0;
+      border-radius: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px;
+    }
+    .slider .icon { font-size: 14px; z-index: 1; user-select: none; }
+    .slider:before {
+      background-color: white;
+      bottom: 4px;
+      content: "";
+      height: 24px;
+      left: 4px;
+      position: absolute;
+      width: 24px;
+      border-radius: 50%;
+      transition: transform var(--transition);
+      z-index: 2;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    input:checked + .slider { background-color: var(--primary-color); }
+    input:checked + .slider:before { transform: translateX(32px); }
+
+    .upload-options {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .upload-options label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: 1rem;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+    button {
+      padding: 12px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover { background-color: var(--primary-hover); }
+    .file-item {
+      margin-top: 15px;
+      padding: 15px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background-color: var(--bg-color);
+      overflow-x: auto;
+    }
+    .file-item strong {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+    .snippet {
+      color: var(--snippet-color);
+      white-space: pre-wrap;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin: 4px 0;
+    }
+    .hex-offset {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      background: var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-right: 8px;
+      color: var(--text-color);
+    }
+    .highlight {
+      background-color: var(--highlight-bg);
+      color: var(--highlight-text);
+      font-weight: 600;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .file-meta {
+      font-size: 0.85rem;
+      color: var(--snippet-color);
+      margin-top: 4px;
+    }
+    .loader { text-align: center; padding: 20px; color: var(--snippet-color); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h2>Cari Teks di File</h2>
+    <label class="theme-switch" title="Ganti Tema">
+      <input type="checkbox" id="themeToggle">
+      <div class="slider">
+        <span class="icon sun">☀️</span>
+        <span class="icon moon">🌙</span>
+      </div>
+    </label>
+  </div>
+
+  <div class="upload-options">
+    <label><input type="radio" name="uploadMode" value="files" checked> Upload File</label>
+    <label><input type="radio" name="uploadMode" value="archive"> Arsip (ZIP/RAR/JAR)</label>
+  </div>
+
+  <div class="input-group">
+    <input type="file" id="fileInput" multiple>
+    <input type="text" id="searchText" placeholder="Masukkan teks yang ingin dicari...">
+    <button onclick="searchTextInFiles()">Cari Sekarang</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+// ===== TEMA =====
+const toggleSwitch = document.getElementById('themeToggle');
+const currentTheme = localStorage.getItem('theme');
+if (currentTheme) {
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  if (currentTheme === 'dark') toggleSwitch.checked = true;
+}
+toggleSwitch.addEventListener('change', function(e) {
+  const theme = e.target.checked ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+});
+
+// ===== MODE UPLOAD =====
+const modeRadios = document.querySelectorAll('input[name="uploadMode"]');
+const fileInput = document.getElementById('fileInput');
+
+modeRadios.forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.value === 'files') {
+      fileInput.accept = '*/*';
+      fileInput.multiple = true;
+    } else {
+      fileInput.accept = '.zip,.rar,.jar';
+      fileInput.multiple = false;
+    }
+    fileInput.value = '';
+    filesData = [];
+    document.getElementById('result').innerHTML = '';
+  });
+});
+fileInput.accept = '*/*';
+fileInput.multiple = true;
+
+// ===== DATA =====
+let filesData = []; // { name, content (string|null), buffer (ArrayBuffer|null), type: 'text'|'document'|'binary' }
+
+// ===== PROSES FILE (terima buffer langsung) =====
+async function processFileBuffer(name, buffer) {
+  const ext = name.split('.').pop().toLowerCase();
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+
+  // Coba ekstrak teks jika dokumen
+  if (ext === 'pdf') {
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+    }
+    return { name, content: fullText, buffer: null, type: 'document' };
+  }
+  if (ext === 'docx') {
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    return { name, content: result.value, buffer: null, type: 'document' };
+  }
+  if (ext === 'xlsx') {
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    let fullText = '';
+    workbook.SheetNames.forEach(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      json.forEach(row => fullText += row.join(' ') + '\n');
+    });
+    return { name, content: fullText, buffer: null, type: 'document' };
+  }
+
+  // Untuk file teks biasa, coba decode
+  if (['txt', 'log', 'csv', 'json', 'xml', 'html', 'css', 'js', 'py', 'java', 'c', 'cpp', 'h', 'sh'].includes(ext)) {
+    let text = decoder.decode(buffer);
+    // Hapus BOM jika ada
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    return { name, content: text, buffer: null, type: 'text' };
+  }
+
+  // Selain itu, simpan sebagai binary (buffer asli)
+  return { name, buffer: buffer, content: null, type: 'binary' };
+}
+
+// ===== EKSTRAKSI ARSIP (baca buffer asli) =====
+async function extractArchive(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const buffer = await file.arrayBuffer();
+  let results = [];
+
+  if (ext === 'zip' || ext === 'jar' || ext === 'war' || ext === 'ear') {
+    const zip = await JSZip.loadAsync(buffer);
+    for (let [filename, zipEntry] of Object.entries(zip.files)) {
+      if (!zipEntry.dir) {
+        // Baca langsung sebagai ArrayBuffer
+        const entryBuffer = await zipEntry.async('arraybuffer');
+        const processed = await processFileBuffer(filename, entryBuffer);
+        results.push(processed);
+      }
+    }
+  } else if (ext === 'rar') {
+    try {
+      const rarData = new Uint8Array(buffer);
+      const reader = new UNRAR(rarData);
+      const list = reader.getFileList();
+      for (let fileInfo of list) {
+        if (!fileInfo.isDirectory) {
+          const fileData = reader.extract(fileInfo); // Uint8Array
+          const entryBuffer = fileData.buffer;
+          const processed = await processFileBuffer(fileInfo.name, entryBuffer);
+          results.push(processed);
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal ekstrak RAR:', e);
+    }
+  }
+  return results;
+}
+
+// ===== EVENT FILE INPUT =====
+fileInput.addEventListener('change', async function(event) {
+  const files = event.target.files;
+  filesData = [];
+  const mode = document.querySelector('input[name="uploadMode"]:checked').value;
+  document.getElementById('result').innerHTML = '<div class="loader">⏳ Memproses file...</div>';
+
+  try {
+    if (mode === 'files') {
+      for (let file of files) {
+        const buffer = await file.arrayBuffer();
+        const processed = await processFileBuffer(file.name, buffer);
+        filesData.push(processed);
+      }
+    } else {
+      if (files.length === 0) return;
+      const archiveFile = files[0];
+      const extracted = await extractArchive(archiveFile);
+      filesData.push(...extracted);
+    }
+    document.getElementById('result').innerHTML = `<p>✅ ${filesData.length} file siap dicari.</p>`;
+  } catch (err) {
+    document.getElementById('result').innerHTML = `<p style="color:#ef4444;">❌ Gagal memproses: ${err.message}</p>`;
+    console.error(err);
+  }
+});
+
+// ===== PENCARIAN =====
+function highlightText(text, keyword) {
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(regex, '<span class="highlight">$1</span>');
+}
+
+function getSnippet(content, keyword, index) {
+  const start = Math.max(0, index - 40);
+  const end = Math.min(content.length, index + 40);
+  return content.substring(start, end);
+}
+
+function searchBinary(buffer, keyword) {
+  const encoder = new TextEncoder();
+  const keywordBytes = encoder.encode(keyword);
+  const view = new Uint8Array(buffer);
+  const matches = [];
+  let pos = 0;
+  while (pos < view.length) {
+    const idx = view.indexOf(keywordBytes[0], pos);
+    if (idx === -1) break;
+    let match = true;
+    for (let i = 0; i < keywordBytes.length; i++) {
+      if (idx + i >= view.length || view[idx + i] !== keywordBytes[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      matches.push(idx);
+      pos = idx + keywordBytes.length;
+    } else {
+      pos = idx + 1;
+    }
+  }
+  return matches;
+}
+
+function formatHexSnippet(buffer, offset, context = 16) {
+  const view = new Uint8Array(buffer);
+  const start = Math.max(0, offset - context);
+  const end = Math.min(view.length, offset + context);
+  const bytes = [];
+  for (let i = start; i < end; i++) {
+    bytes.push(view[i].toString(16).padStart(2, '0'));
+  }
+  return bytes.join(' ');
+}
+
+function searchTextInFiles() {
+  const keyword = document.getElementById('searchText').value.trim();
+  const resultDiv = document.getElementById('result');
+  resultDiv.innerHTML = '';
+
+  if (!keyword) {
+    resultDiv.innerHTML = "<p style='color: #ef4444; font-weight: bold;'>⚠️ Masukkan teks terlebih dahulu.</p>";
+    return;
+  }
+  if (filesData.length === 0) {
+    resultDiv.innerHTML = "<p style='color: var(--snippet-color);'>Belum ada file. Silakan upload file atau arsip.</p>";
+    return;
+  }
+
+  let found = false;
+
+  filesData.forEach(file => {
+    if (file.type === 'text' || file.type === 'document') {
+      const content = file.content;
+      if (content && content.toLowerCase().includes(keyword.toLowerCase())) {
+        found = true;
+        const idx = content.toLowerCase().indexOf(keyword.toLowerCase());
+        const snippet = getSnippet(content, keyword, idx);
+        const highlighted = highlightText(snippet, keyword);
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.innerHTML = `
+          <strong>📄 ${file.name}</strong>
+          <div class="snippet">...${highlighted}...</div>
+        `;
+        resultDiv.appendChild(div);
+      }
+    } else if (file.type === 'binary' && file.buffer) {
+      const matches = searchBinary(file.buffer, keyword);
+      if (matches.length > 0) {
+        found = true;
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        let html = `<strong>📄 ${file.name} (biner)</strong>`;
+        const maxShow = Math.min(matches.length, 3);
+        for (let i = 0; i < maxShow; i++) {
+          const offset = matches[i];
+          const hex = formatHexSnippet(file.buffer, offset, 12);
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+          const start = Math.max(0, offset - 20);
+          const end = Math.min(file.buffer.byteLength, offset + 20);
+          const slice = file.buffer.slice(start, end);
+          let textSnippet = decoder.decode(slice);
+          const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+          textSnippet = textSnippet.replace(regex, '<span class="highlight">$1</span>');
+
+          html += `
+            <div class="snippet">
+              <span class="hex-offset">Offset 0x${offset.toString(16).padStart(8, '0')}</span>
+              <span>${textSnippet}</span>
+              <br><span style="font-family:monospace; font-size:0.8rem; color:var(--snippet-color);">${hex}</span>
+            </div>
+          `;
+        }
+        if (matches.length > 3) {
+          html += `<div class="file-meta">... dan ${matches.length - 3} lokasi lainnya.</div>`;
+        }
+        div.innerHTML = html;
+        resultDiv.appendChild(div);
+      }
+    }
+  });
+
+  if (!found) {
+    resultDiv.innerHTML = "<p style='color: var(--snippet-color);'>Tidak ditemukan teks di file manapun.</p>";
+  }
+}
+</script>
+</body>
+</html>
